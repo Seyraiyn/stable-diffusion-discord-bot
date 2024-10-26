@@ -33,6 +33,7 @@ var slashCommands = [
     description: 'Create a new image from your prompt',
     options: [
       {type: 3, name: 'prompt', description: 'what you want to see ?', required: true, min_length: 1, max_length:1500 },
+      {type: 3, name: 'preset', description: 'Preset bundles of settings', required: false, choices:presetsSlash},
       {type: 3, name: 'negative', description: 'what dont you want to see ?', required: false, min_length: 1, max_length:1500 },
       {type: 4, name: 'width', description: 'width of the image in pixels', required: false, min_value: 256, max_value: 2048 },
       {type: 4, name: 'height', description: 'height of the image in pixels', required: false, min_value: 256, max_value: 2048 },
@@ -42,7 +43,6 @@ var slashCommands = [
       {type: 10, name: 'scale', description: 'how important is the prompt (cfg_scale)', required: false, min_value:1, max_value:30},
       {type: 4, name: 'number', description: 'how many would you like', required: false, min_value: 1, max_value: config.maximum.iterations??10},
       {type: 3, name: 'model', description: 'Change the model/checkpoint - see !models for more info', required: false,   min_length: 3, max_length:40},
-      {type: 3, name: 'preset', description: 'Preset bundles of settings', required: false, choices:presetsSlash},
       {type: 3, name: 'sampler', description: 'which sampler to use (default is '+defaultSampler+')', required: false, choices: samplersSlash},
       {type: 4, name: 'clipskip', description: 'clip skip (0-10)', required: false},
       {type: 11, name: 'attachment', description: 'use template image', required: false},
