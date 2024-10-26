@@ -1806,25 +1806,6 @@ imageResultMessage = async(userid,img,result,meta,cid)=>{
         }
         newmsg.components.push({type:1,components:[{type: 3,custom_id:'edit-x-controlend',placeholder:'Controlnet end at '+(parseFloat(meta.invoke.controlend)*100).toFixed(0)+'%',min_values:1,max_values:1,options:cnwo}]})
     }
-    if(meta.invoke?.inputImageUrl&&meta.invoke?.control&&meta.invoke?.controlstart&&meta.invoke?.control==='i2l'){
-        let cnwo = []
-        for (const i in cnwos){
-            let o = cnwos[i]
-            let od = (parseFloat(meta.invoke.controlstart).toFixed(2)===(o/100).toFixed(2)) ? 'Selected' : null
-            cnwo.push({value:(o/100).toFixed(2),description:od,label:o+'%'})
-        }
-        newmsg.components.push({type:1,components:[{type: 3,custom_id:'edit-x-controlstart',placeholder:'Denoise start at '+(parseFloat(meta.invoke.controlstart)*100).toFixed(0)+'%',min_values:1,max_values:1,options:cnwo}]})
-    }
-    // same for controlend
-    if(meta.invoke?.inputImageUrl&&meta.invoke?.control&&meta.invoke?.controlend&&meta.invoke?.control==='i2l'){
-        let cnwo = []
-        for (const i in cnwos){
-            let o = cnwos[i]
-            let od = (parseFloat(meta.invoke.controlend).toFixed(2)===(o/100).toFixed(2)) ? 'Selected' : null
-            cnwo.push({value:(o/100).toFixed(2),description:od,label:o+'%'})
-        }
-        newmsg.components.push({type:1,components:[{type: 3,custom_id:'edit-x-controlend',placeholder:'Denoise end at '+(parseFloat(meta.invoke.controlend)*100).toFixed(0)+'%',min_values:1,max_values:1,options:cnwo}]})
-    }
     // get all available controlnet modes and ipa types for base model
     if(meta.invoke?.inputImageUrl&&meta.invoke?.control){
         let cnwo = []
