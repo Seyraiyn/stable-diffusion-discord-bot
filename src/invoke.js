@@ -16,6 +16,7 @@ const {resultCache}=require('./resultCache')
 const {aspectRatio}=require('./discord/aspectRatio')
 const {credits}=require('./credits')
 const {exif}=require('./exif')
+const {civitai}=require('./civitai')
 var cluster=config.cluster
 
 const init=async()=>{
@@ -171,7 +172,7 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
         if(['sdxl_model_loader','main_model_loader','vae_loader','seamless','flux_model_loader'].includes(type)){lastid.vae=newid}
         if(['t2l','ttl','lscale','l2l','i2l','denoise_latents','lresize','flux_denoise'].includes(type)){lastid.latents=newid}
         if(['noise'].includes(type)){lastid.noise=newid}
-        if(['controlnet'].includes(type)){lastid.control=newid}
+        if(['controlnet','flux_controlnet'].includes(type)){lastid.control=newid}
         if(['openpose_image_processor','l2i','face_mask_detection','img_resize'].includes(type)){lastid.image=newid}
         if(['face_mask_detection'].includes(type)){lastid.mask=newid,lastid.width=newid;lastid.height=newid}
         if(['create_denoise_mask'].includes(type)){lastid.denoise_mask=newid}
@@ -181,7 +182,7 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
         if(['merge_metadata'].includes(type)){lastid.merge_metadata=newid}
         if(['collect'].includes(type)){lastid.collect=newid}
         if(['string'].includes(type)){lastid.string=newid}
-        if(['ip_adapter'].includes(type)){lastid.ip_adapter=newid}
+        if(['ip_adapter','flux_ip_adapter'].includes(type)){lastid.ip_adapter=newid}
         if(['t2i_adapter'].includes(type)){lastid.t2i_adapter=newid}
         if(['flux_text_encoder'].includes(type)){lastid.conditioning=newid}
         if(['flux_lora_loader','flux_model_loader'].includes(type)){lastid.transformer=newid}
@@ -339,15 +340,20 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
                 pipe(lastid.clip,'t5_encoder','SELF','t5_encoder'),
                 pipe(lastid.clip,'max_seq_len','SELF','t5_max_seq_len')
             ])
-        if(job.initimgObject){ // broken, cos of dimensions (i assume?, test moar)
+        if(job.initimgObject&&job.control==='i2l'){
             // todo Add selector for flux controlnets
-            // if we want to import an image use flux_vae_encode , recommend flux-fusion 8 steps start denoise 0.125 end 1
-            //
-            debugLog('Adding nodes for flux input image')
             node('img_resize',{image:{image_name:job.initimgObject.image_name},width:closestMultipleOf16(job.width),height:closestMultipleOf16(job.height),resample_mode:'bicubic',use_cache:true,is_intermediate:true})
             node('flux_vae_encode',{},[pipe(lastid.image,'image','SELF','image'),pipe(lastid.vae,'vae','SELF','vae')])
             //node('flux_vae_encode',{image:{image_name:job.initimgObject.image_name}},[pipe(lastid.vae,'vae','SELF','vae')])
             // todo need to copy width and height output to flux denoise or this will fail
+        } else if (job.initimgObject&&job.control==='ipa'){
+            // flux ip adapter model should be set when validating job
+            let ip_adapter_model = await modelnameToObject('ip_adapter_flux','ip_adapter')
+            node('flux_ip_adapter',{image:{image_name:job.initimgObject.image_name},ip_adapter_model,clip_vision_model:'ViT-L',weight:job.controlweight,begin_step_percent:job.controlstart,end_step_percent:job.controlend,use_cache:true,is_intermediate:true})
+        } else if (job.initimgObject&&job.control){
+            // load controlnet
+            let control_model = await modelnameToObject(job.control,'controlnet')
+            node('flux_controlnet',{image:{image_name:job.initimgObject.image_name},control_model,begin_step_percent:job.controlstart??0,end_step_percent:job.controlend??1,control_weight:job.controlweight??1,instantx_control_mode:-1,resize_mode:'just_resize',use_cache:true,is_intermediate:true})
         }
         // lora chain
         if(job.loras?.length>0){
@@ -360,22 +366,40 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
                 pipe(lastid.vae,'vae','SELF','controlnet_vae') // invoke 5.2rc1
         ]
         let fluxdenoiseoptions = {
-            denoising_end:job.controlend??1,
-            denoising_start:job.controlstart??0,
+            denoising_end:1,
+            denoising_start:0,
             num_steps:job.steps,
             guidance:job.scale,
+            cfg_scale:job.scale,
+            cfg_scale_start_step:0,
+            cfg_scale_end_step:-1,
             use_cache:true,
             is_intermediate:true,
             width:closestMultipleOf16(job.width),
             height:closestMultipleOf16(job.height)
         }
+
+        if(job.initimgObject&&job.control==='i2l'&&job.strength){
+            fluxdenoiseoptions.denoising_start=1.0-job.strength
+        } else if (job.initimgObject&&job.control==='ipa'){
+            fluxdenoisepipes.push(pipe(lastid.ip_adapter,'ip_adapter','SELF','ip_adapter'))
+        } else if (job.initimgObject&&lastid.control){
+            fluxdenoisepipes.push(pipe(lastid.control,'control','SELF','control'))
+        }
+        if(job.scale>1){
+            node('flux_text_encoder',{prompt:job.negative_prompt,use_cache:true,is_intermediate:true},
+                [
+                    pipe(lastid.clip,'clip','SELF','clip'),
+                    pipe(lastid.clip,'t5_encoder','SELF','t5_encoder'),
+                    pipe(lastid.clip,'max_seq_len','SELF','t5_max_seq_len')
+                ])
+            fluxdenoisepipes.push(pipe(lastid.conditioning,'conditioning','SELF','negative_text_conditioning'))
+        }
         if(lastid.latents){
-            debugLog('Adding flux input image')
             //fluxdenoiseoptions.width = closestMultipleOf16(job.width)
             //fluxdenoiseoptions.height = closestMultipleOf16(job.height)
             fluxdenoisepipes.push(pipe(lastid.latents,'latents','SELF','latents'))
         }
-        debugLog('flux res '+fluxdenoiseoptions.width+' x '+fluxdenoiseoptions.height)
         node('flux_denoise',fluxdenoiseoptions,fluxdenoisepipes)
         node('flux_vae_decode',{is_intermediate:false,use_cache:true},[pipe(lastid.vae,'vae','SELF','vae'),pipe(lastid.latents,'latents','SELF','latents'),pipe(lastid.merge_metadata,'metadata','SELF','metadata')])
         let dataitems = [job.seed]
@@ -384,7 +408,6 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
 
         let noiseIds = Object.values(graph.nodes).filter(i=>i.type==='flux_denoise').map(i=>i.id)
         for (const id in noiseIds){data[0].push({node_path:noiseIds[id],field_name:'seed',items:dataitems})}
-        debugLog(graph)
         return {batch:{graph,data,runs:1},prepend:false}
     }
     // Add freeu node https://stable-diffusion-art.com/freeu/
@@ -401,12 +424,10 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
     */
 
     if(job.initimgObject){
-        debugLog('Adding init img to graph')
         if(job.control==='ipa'){ // todo rework so it can be used independantly of controlnet or i2l , allow model selection
             let ipamodel=(job.model.base==='sdxl')?'ip_adapter_sdxl':'ip_adapter_sd15'
             if(job.ipamodel){ipamodel=job.ipamodel}
             let ipamodelobject=await(modelnameToObject(ipamodel,'ip_adapter'))
-            debugLog('Using ip_adapter with input image, model '+ipamodelobject.name)
             node('ip_adapter',{ip_adapter_model:{base:ipamodelobject.base,name:ipamodelobject.name,key:ipamodelobject.key,hash:ipamodelobject.hash,type:ipamodelobject.type,submodel_type:null},begin_step_percent:job.controlstart?job.controlstart:0,end_step_percent:job.controlend?job.controlend:1,method:job.ipamethod??'full',is_intermediate:true,image:{image_name:job.initimgObject.image_name},weight:job.controlweight?job.controlweight:1},[])
         // todo need to incorporate t2i as well, copy ipamodel syntax, add a --t2imodel param
         // } else if (job.control==='t2i') {
@@ -415,7 +436,6 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
         //      debugLog('Using t2i_adapter with input image, model '+t2imodel)
         //      node('t2i_adapter',{t2i_adapter_model:{base_model:job.model.base_model,model_name:t2imodel},begin_step_percent:job.controlstart?job.controlstart:0,end_step_percent:job.controlend?job.controlend:1,is_intermediate:true,image:{image_name:job.initimgObject.image_name},weight:job.controlweight?job.controlweight:1},[])
         } else if(job.facemask){
-            debugLog('Using face mask detection')
             node('face_mask_detection',{is_intermediate:true,face_ids:'0',minimum_confidence:0.5,x_offset:0,y_offset:0,chunk:false,invert_mask:job.invert??false,image:{image_name:job.initimgObject.image_name}})
             node('i2l',{is_intermediate:false,fp32:fp32},[pipe(lastid.vae,'vae','SELF','vae'),pipe(lastid.image,'image','SELF','image')])
             node('create_denoise_mask',{is_intermediate:false,fp32:fp32,tiled:false},[pipe(lastid.image,'image','SELF','image'),pipe(lastid.mask,'mask','SELF','mask'),pipe(lastid.vae,'vae','SELF','vae')])
@@ -1214,14 +1234,15 @@ const validateJob = async(job)=>{
                 if(!job.controlresize||['just_resize','crop_resize','fill_resize'].includes(job.controlresize)===false){job.controlresize='just_resize'}//else{job.controlresize='just_resize'}
                 if(!job.controlmode||['balanced','more_prompt','more_control','unbalanced'].includes(job.controlmode)===false){job.controlmode='balanced'}
                 if(!job.controlweight){job.controlweight=1}
-                if(!job.controlstart){job.controlstart=0.15}
+                if(!job.controlstart){job.controlstart=0}
                 if(!job.controlend){job.controlend=1}
             }
             if(job.control==='ipa'){
                 if(!job.ipamodel){
                     if(job.model.base==='sdxl'){job.ipamodel='ip_adapter_sdxl'}
                     if(job.model.base==='sd1'){job.ipamodel='ip_adapter_sd15'}
-                    if(job.model.base==='flux'){job.ipamodel='ip_adapter_flux'} // does not exist, will not work, placeholder
+                    if(job.model.base==='flux'){job.ipamodel='ip_adapter_flux'} // XLabs FLUX IP-Adapter
+                    // does not exist, will not work, placeholder
                     //job.ipamodel=(job.model.base==='sdxl')?'ip_adapter_sdxl':'ip_adapter_sd15'
                 }
                 if(!job.ipamethod){job.ipamethod='full'}
