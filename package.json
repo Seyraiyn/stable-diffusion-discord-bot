@@ -33,7 +33,7 @@
     "cookie-parser": "^1.4.6",
     "crypto": "^1.0.1",
     "csurf": "^1.11.0",
-    "datastore-fs": "^9.1.8",
+    "datastore-fs": "^10.0.2",
     "debounce": "^2.0.0",
     "duck-duck-scrape": "^2.2.5",
     "duckduckgo-images-api": "^1.0.5",
