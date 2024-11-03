@@ -2,26 +2,23 @@
 const {log,debugLog,sleep, getUUID, getRandomColorDec}=require('../utils.js')
 const {resultCache}=require('../resultCache')
 
-update = async(msg,batchid)=>{
+update = async(msg,batchid,creator)=>{
     // Call once, repetitively update message with results of get(batchid)
     let error=false,done=false,statusmsg=null,cached=null,result=null,interval=500,fails=0
     while(!error&&!done){
         try {
             await sleep(interval)
             result = resultCache.get(batchid)
-            statusmsg = returnProgressMessage(batchid)
+            if(['completed','failed','cancelled','canceled'].includes(result?.status)){await msg.delete();done = true;return}
+            statusmsg = returnProgressMessage(batchid,creator)
             if(!statusmsg){
                 fails++
-                if(fails>3){await msg.delete();return}
+                if(fails>3){await msg.delete();error=true;return}
                 continue
             }
             if(statusmsg&&statusmsg!==cached){
                 cached=statusmsg // update cache
                 await msg.edit(statusmsg.msg,statusmsg.file) // edit progress message
-            }
-            if(['completed','failed','cancelled'].includes(result.status)){
-                await msg.delete()
-                return
             }
         } catch (err) {
             debugLog(err)
@@ -30,7 +27,7 @@ update = async(msg,batchid)=>{
     }
 }
 
-returnProgressMessage = (batchid) =>{
+returnProgressMessage = (batchid,creator) =>{
     // Return a formatted discord message tracking progress for a specific batchid
     let err = false
     try {
@@ -48,6 +45,9 @@ returnProgressMessage = (batchid) =>{
             content+=' '
             if(r.hostname){content+=' on `'+r.hostname+'`'}
             content+='\n'
+            if(creator?.discordid){
+                content=`:brain: Requested by <@${creator.discordid}> \n${content}`
+            }
             if(r.progress?.message!==undefined&&r.progress?.percentage!==undefined){
                 let percent = (r.progress.percentage*100).toFixed(0) //(parseInt(r.progress?.step) / parseInt(r.progress?.total_steps))*100
                 let message = r.progress.message
@@ -65,7 +65,16 @@ returnProgressMessage = (batchid) =>{
                 content = content + '\n'
             }
             */
-        let components = [{type:1,components:[{type:2,style:4,label:'Cancel',custom_id:'cancelBatch-'+batchid,emoji:{name:'🗑️',id:null},disabled:false}]}]
+        let components = [{
+            type:1,
+            components:[{
+                type:2,
+                style:4,
+                label:'Cancel',
+                custom_id: `cancelBatch-${batchid}`,
+                emoji:{name:'🗑️',id:null},
+                disabled:false}]
+            }]
         let msg = {embeds: [{description:content}],components:components}
         if(file){
             msg.embeds[0].thumbnail={url:'attachment://'+filename}
