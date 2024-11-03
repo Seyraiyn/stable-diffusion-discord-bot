@@ -1,7 +1,6 @@
 // Handle all functions related to credit state management
 const {log,debugLog,config} = require('./utils.js')
 const {db,User,Op}=require('./db.js')
-const { isObject } = require('lodash')
 const defaultCredits = config.credits.default??100.00
 
 balance=async(user)=>{
@@ -9,7 +8,7 @@ balance=async(user)=>{
     // first function trigger when interacting with new user
     // accept both job.creator object and plain id
     let userid,username
-    if(isObject(user)){
+    if(typeof user === 'object' && user !== null){ // Replaced lodash isObject check
         userid=user.discordid
         username=user.username
     }else{
