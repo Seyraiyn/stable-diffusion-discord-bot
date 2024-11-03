@@ -12,7 +12,7 @@
 
 const {Client} = require('@hiveio/dhive')
 const hiveuri = require('hive-uri')
-const hiverpc = ['https://rpc.ausbit.dev','https://api.hive.blog', 'https://api.deathwing.me', 'https://api.hive.blue', 'https://api.openhive.network', 'https://hive-api.arcange.eu', 'https://hived.emre.sh', 'https://techcoderx.com', 'https://anxy.io', 'https://rpc.mahdiyari.info']
+const hiverpc = ['https://api.deathwing.me', 'https://api.openhive.network', 'https://techcoderx.com','https://api.hive.blog']
 const client = new Client(hiverpc)
 const {config,log,debugLog,axios}=require('../utils.js')
 const {qrcode} = require('../qrcode')
@@ -27,7 +27,11 @@ const poll = async()=>{
         let accHistory = await client.database.getAccountHistory(acc,-1,100,[4,524288]) // last 100 transfer / fill_recurrent_transfer ops for acc
         let paymentsToCheck = []
         // if invalid data is returned by api, abort
-        if(!Array.isArray(accHistory)){debugLog('Invalid Hive account history returned,aborting');return}
+        if(!Array.isArray(accHistory)){
+            debugLog('Invalid Hive account history returned,aborting')
+            debugLog(accHistory)
+            return
+        }
         for (const r in accHistory){
             let tx = accHistory[r]
             let optype = tx[1].op[0]
