@@ -63,6 +63,13 @@ const cat = async(cid)=>{
 }
 
 const init = async()=>{
+    // Add global.DOMException handling
+    if (typeof global.DOMException === 'undefined') {
+        const { DOMException } = await import('node-domexception')
+        global.DOMException = DOMException
+    }
+
+
     // Helia config
     const { createHelia } = await import('helia')
     const { unixfs } = await import('@helia/unixfs')
@@ -73,80 +80,7 @@ const init = async()=>{
     const { FsDatastore } = await import('datastore-fs')
     const datastore = new FsDatastore('config/ipfs/data-store')
     // Disabled all libp2p customisation for now, let helia do it
-    // todo learn why peerId isn't persistant when customizing libp2p options
-    // todo remove all related dependancies if this step isn't required
-    /*
-    let ipfsip=config.ipfs?.ip??"0.0.0.0"
-    let ipfsport=config.ipfs?.port??"0"
-    // libp2p networking related configuration
-    const { noise } = await import('@chainsafe/libp2p-noise') // for encrypting connections 
-    // stream muxers
-    const { yamux } = await import('@chainsafe/libp2p-yamux')
-    const { mplex } = await import('@libp2p/mplex')
-    // transports
-    const { webSockets } = await import('@libp2p/websockets')
-    const { tcp } = await import('@libp2p/tcp') // Required to enable TCP connection for peer to peer communication
-    // peer discovery
-    const { bootstrap } = await import('@libp2p/bootstrap')
-    //const { gossipsub } = await import('libp2p-gossipsub')
-    const { kadDHT } = await import('@libp2p/kad-dht') 
-    // const { autoNAT } = await import('@libp2p/autonat')
-    // const { uPnPNATService } = await import('@libp2p/upnp-nat')
-    const { identify } = await import('@libp2p/identify')
-    const { createLibp2p } = await import('libp2p')
-    const { mdns } = await import('@libp2p/mdns')
-    const { stop } = await import('@libp2p/interface')
-    const libp2pArgs = {
-        datastore,
-        blockstore,
-        addresses: {
-            listen: [
-                // add a listen address (localhost) to accept TCP connections on a random port
-                // pull additional listening addresses/ports from config
-                '/ip4/'+ipfsip+'/tcp/'+ipfsport,
-                // Listen on localhost IPv4 interface on a random port
-                '/ip4/127.0.0.1/tcp/0',
-                // Listen on all available IPv4 interfaces on a random port
-                //'/ip4/0.0.0.0/tcp/0',
-                // Listen on all available IPv6 interfaces on a random port
-                //'/ip6/::/tcp/0'
-            ]
-        },
-        transports: [tcp(),webSockets()],
-        connectionEncryption: [noise()],
-        streamMuxers: [yamux(),mplex()],
-        peerDiscovery: [
-            bootstrap({
-                list: [
-                    // ipfs public nodes
-                    '/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
-                    '/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa',
-                    '/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
-                    '/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt',
-                    '/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ'
-                ]
-            }),
-            mdns()
-        ],
-        services: {
-            identify: identify(),
-            pubsub: gossipsub({
-                emitSelf: false,                                  // whether the node should emit to self on publish
-                //globalSignaturePolicy: SignaturePolicy.StrictSign // message signing policy
-            }),
-            dht: kadDHT({kBucketSize:20,clientMode:true}),
-        }
-    }
-    const libp2p = await createLibp2p(libp2pArgs)
-    await libp2p.start // needed ? Could be triggered by createHelia step, unsure
-    */
     helia = await createHelia({datastore,blockstore,libp2p: {connectionManager: {maxConnections: 50,minConnections: 10}},})
-    /*
-    debugLog('libp2p listening on addresses:')
-    helia.libp2p.getMultiaddrs().forEach((addr) => {
-        debugLog(addr.toString())
-    })
-    */
     // Listen for new connections to peers
     helia.libp2p.addEventListener("libp2p peer:connect", (evt) => {
         const connection = evt.detail
