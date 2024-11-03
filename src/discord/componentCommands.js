@@ -21,7 +21,6 @@ let commands = [
         command: async (interaction,creator)=>{
             let trackingmsg = null
             try{
-                if(!interaction?.acknowledged){await interaction?.acknowledge()}
                 //interaction.message.addReaction('🎲')
                 trackingmsg = await bot.createMessage(interaction.channel.id,{content:':saluting_face: refreshing '+timestamp()})
             } catch(err){
@@ -48,14 +47,20 @@ let commands = [
         permissionLevel: 'all',
         aliases: ['edit'],
         command: async (interaction,creator)=>{
-            if(!interaction?.acknowledged){await interaction?.acknowledge()}
             let msgid = (interaction.data.custom_id.split('-')[1]==='x')?interaction.message.id : interaction.data.custom_id.split('-')[1]
             let channelid = interaction.channel.id
             let img = null
             // todo arty1 templates are sending edit component commands with no key or interaction.data.components
             // Send update notice and tell to use /dream ?
-            let key = interaction.data.custom_id.split('-')[2]??interaction.data.components[0].components[0].custom_id
-            if(!key){debugLog('Someone trying to use an old arty1 template ?')}
+            let key = null
+            try{
+                key = interaction.data.custom_id.split('-')[2]??interaction.data?.components[0]?.components[0]?.custom_id
+            } catch (err) {
+                debugLog(err)
+            }
+            if(!key){
+                debugLog('Someone trying to use an old arty1 template ?')
+            }
             let value = interaction.data.custom_id.split('-')[2]?interaction.data.values[0]:interaction.data.components[0].components[0].value
             let trackingmsg = null
             trackingmsg = await bot.createMessage(channelid,{content:':saluting_face: refreshing with **'+key+'** of `'+value.substring(0,1000)+'` '+timestamp()})
@@ -104,7 +109,6 @@ let commands = [
             if(meta.invoke?.inputImageUrl){img = await urlToBuffer(meta.invoke.inputImageUrl)}
             let job = await invoke.jobFromMeta(meta,img,{type:'discord',msg:trackingmsg})
             job.creator = creator
-            //job.creator = await getCreatorInfoFromInteraction(interaction)
             job = await auth.userAllowedJob(job)
             let result = await invoke.cast(job)
             if(meta.invoke?.inputImageUrl && !result.error && result.images?.length > 0){result.images[0].buffer = await exif.modify(result.images[0].buffer,'arty','inputImageUrl',meta.invoke.inputImageUrl)}
@@ -119,10 +123,8 @@ let commands = [
         permissionLevel: 'all',
         aliases: ['editPrompt'],
         command: async (interaction,creator)=>{
-            if(!interaction?.acknowledged){await interaction.acknowledge}
             let meta = await messageCommands.extractMetadataFromMessage(interaction.message)
             let prompt = meta.invoke?.prompt
-            //if(meta.invoke?.negative_prompt){prompt=prompt+' ['+meta.invoke?.negative_prompt+']'}
             return interaction.createModal({
                 custom_id:'edit-'+interaction.message.id,
                 title:'Edit the random prompt?',
@@ -172,7 +174,6 @@ let commands = [
         permissionLevel: 'all',
         aliases: ['editScale'],
         command: async (interaction,creator)=>{
-            if(!interaction.acknowledged){await interaction.acknowledge}
             let msgid = interaction.data.custom_id.split('-')[1]
             let channelid = interaction.channel.id
             let sourcemsg = await bot.getMessage(channelid,msgid)
@@ -231,7 +232,6 @@ let commands = [
         permissionLevel: 'all',
         aliases: ['editStrength'],
         command: async (interaction,creator)=>{
-            if(!interaction.acknowledged){await interaction.acknowledge}
             let msgid = interaction.data.custom_id.split('-')[1]
             let channelid = interaction.channel.id
             let sourcemsg = await bot.getMessage(channelid,msgid)
@@ -367,6 +367,10 @@ let commands = [
             let currentModelBase = meta?.invoke?.model?.base;
             let loras = await invoke.allUniqueLorasAvailable();
             let availableLoras = loras.filter(l => l.base === currentModelBase);
+            
+            // Sort loras alphabetically, ignoring case
+            availableLoras.sort((a, b) => a.name.localeCompare(b.name, undefined, {sensitivity: 'base'}));
+            
             const itemsPerPage = 25;
             const totalPages = Math.ceil(availableLoras.length / itemsPerPage);
             let currentPage = 0;
@@ -432,11 +436,6 @@ let commands = [
                 await interaction.editParent(dialog); // Update the existing message
             };
 
-            // Acknowledge the interaction only once
-            if (!interaction.acknowledged) {
-                await interaction.acknowledge(); // Acknowledge the interaction
-            }
-
             await updateDialog(currentPage); // Show the first page
 
             // Handle pagination button interactions
@@ -471,9 +470,6 @@ let commands = [
 
             // Update the metadata with the new prompt
             meta.invoke.prompt = updatedPrompt;
-
-            // Acknowledge the interaction immediately
-            await interaction.acknowledge();
 
             // Create a tracking message
             let trackingmsg = await bot.createMessage(interaction.channel.id, {
@@ -514,9 +510,6 @@ let commands = [
             let msgid = interaction.data.custom_id.split('-')[1]
             let models = await invoke.allUniqueModelsAvailable()
             if (interaction.data.values) {
-                if (!interaction.acknowledged) {
-                    await interaction?.acknowledge()
-                }
                 let newmodelname = interaction.data.values[0]
                 debugLog('Changing model to ' + newmodelname)
                 let trackingmsg = await bot.createMessage(interaction.channel.id, { content: ':saluting_face: Changing model to ' + newmodelname+' '+timestamp(), embeds: [], components: [] })
@@ -663,7 +656,6 @@ let commands = [
         permissionLevel: ['all'],
         aliases: ['chooseControl'],
         command: async (interaction,creator)=>{
-            if(!interaction.acknowledged){await interaction?.acknowledge()}
             let msgid = interaction.data.custom_id.split('-')[1]
             // At first, keep it simple and allow configuring a single control adapter by name
             // need to discover current if base model is sdxl or not
@@ -690,7 +682,6 @@ let commands = [
         permissionLevel: ['all'],
         aliases: ['remove'],
         command: async (interaction,creator)=>{
-            if(!interaction.acknowledged){await interaction?.acknowledge()}
             let msgid=interaction.message.id
             let msg=await bot.getMessage(interaction.channel.id,msgid)
             // should immediately delete for admin, creator, guild admin
@@ -703,10 +694,11 @@ let commands = [
             if(cid){await mod.downvote(cid,creator)}
             
             if(
-                (interaction.member?.id===config.adminID)|| // admin
-                (msg.mentions.length>0&&interaction.member?.id===msg.mentions[0].id) // creator
+                (interaction.member?.id===config.adminID)|| // bot admin
+                (msg.mentions.length>0&&interaction.member?.id===msg.mentions[0].id)|| // creator
+                interaction.member?.permissions?.has('administrator') // server admin
                 ){
-                // admin or owner can delete
+                // bot admin, server admin or creator can delete
                 // tag the original request so its obvious what happened
                 if(interaction.message.messageReference&&interaction.message.messageReference.messageID!==null){
                     try{
@@ -733,8 +725,6 @@ let commands = [
         aliases: ['removeBackground'],
         command: async (interaction,creator)=>{
             let trackingmsg = interaction.editParent({content:':saluting_face: Removing background '+timestamp(),embeds:[],components:[]})
-            //interaction.acknowledge()
-            debugLog(creator)
             let userid = interaction.member?.id||interaction.author?.id||interaction.user?.id
             let channelid = interaction.channel.id
             let msgid=interaction.data.custom_id.split('-')[1]
@@ -807,7 +797,6 @@ let commands = [
                 if(meta && meta.invoke && width && height){
                     let pixels = parseInt(height) * parseInt(width)
                     if(interaction.data.values){
-                        if(interaction.acknowledged===false){await interaction.acknowledge()}
                         let res = await aspectRatio.ratioToRes(interaction.data.values[0],pixels)
                         // interaction.channel.createMessage does not work in DM
                         //let trackingmsg = await interaction.channel.createMessage({content:':saluting_face: '+res.description+' '+res.width+' x '+res.height+' selected',components:[],embeds:[]})
@@ -847,7 +836,6 @@ let commands = [
             let msgid = interaction.data.custom_id.split('-')[1]
             if(interaction.data.values){
                 // capture a response instead of asking for one
-                if(!interaction.acknowledged){await interaction?.acknowledge()}
                 let channelid = interaction.channel.id
                 let trackingmsg = await bot.createMessage(channelid,{content:':saluting_face: refreshing with **Scheduler** of `'+interaction.data.values[0]+'` '+timestamp()})
                 let sourcemsg = await bot.getMessage(channelid,msgid)
@@ -902,18 +890,30 @@ let commands = [
             // keep it simple for initial version
             // extract batchid from commmand id
             let requester = await getCreatorInfoFromInteraction(interaction)
-            let userid = requester.discordid
-            if(!interaction?.acknowledged){await interaction?.acknowledge()}
+            let userid = requester.discordid.toString()
             let batchid = interaction.data.custom_id.replace('cancelBatch-','')
-            // todo auth gating here
-            if(userid.toString()===config?.adminID.toString()){
-                let response = await invoke.cancelBatch(batchid)
-                log(response)
-            } else {
-                log('Rejected cancel attempt - not admin')
-                log(interaction?.user?.id)
-                log(config.adminID)
+            const creatorId = interaction.message.embeds[0]?.description?.match(/^:brain: Requested by <@(\d+)>/)?.[1] || null
+            // (msg.mentions.length>0&&interaction.member?.id===msg.mentions[0].id) // creator
+            let canCancel = 
+                userid === creatorId || // Original creator
+                userid === config?.adminID || // Bot admin
+                interaction.member?.permissions?.has('administrator') // Server admin
+            if (!canCancel){
+                return interaction.createMessage({
+                    content: 'You do not have permission to cancel this render',
+                    flags: 64 // Ephemeral message
+                })
             }
+            let response = await invoke.cancelBatch(batchid)
+            log(`Batch ${batchid} cancelled by ${requester.username}`)
+            // Update the progress message
+            await interaction.editParent({
+                embeds: [{
+                    description: ':octagonal_sign: Cancelled by ' + requester.username,
+                    color: getRandomColorDec()
+                }],
+                components: [] // Remove the cancel button
+            })
         }
     },
     {
@@ -925,10 +925,6 @@ let commands = [
             amount = 5
             let rechargetype = interaction.data.custom_id.split('-')[1] ?? 'all'
             //debugLog(interaction)
-            if(interaction?.acknowledged===false){
-                //debugLog('interaction not acknowledged, doing that now')
-                await interaction.acknowledge()
-            }
             let paymentmethods = await payments.request(creator.discordid,amount,rechargetype)
             debugLog(paymentmethods)
             if(!paymentmethods){return {error:'No payment methods configured'}}
@@ -966,6 +962,17 @@ getCreatorInfoFromInteraction = async(interaction)=>{
 }
 
 parseCommand = async(interaction) => {
+    // Acknowledge immediately to prevent timeout
+    try {
+        // Modal dialogs cannot be acknowledged early
+        modaldialogids = ['editPrompt','editResolution','editPromptRandom','editScale','editSteps','editStrength']
+        let customId = interaction?.data?.custom_id
+        if (!interaction?.acknowledged&&!modaldialogids.some(baseId => customId === baseId || customId.startsWith(baseId + '-'))) {
+            await interaction.acknowledge();
+        }
+    } catch (err) {
+        log('Failed to acknowledge interaction', err);
+    }
     // Check if the interaction is a pagination request
     if (interaction.data.custom_id.startsWith('previousLora-') || interaction.data.custom_id.startsWith('nextLora-')) {
         return; // Skip command parsing for pagination requests
