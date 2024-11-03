@@ -348,7 +348,7 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
             // todo need to copy width and height output to flux denoise or this will fail
         } else if (job.initimgObject&&job.control==='ipa'){
             // flux ip adapter model should be set when validating job
-            let ip_adapter_model = await modelnameToObject('ip_adapter_flux','ip_adapter')
+            let ip_adapter_model = await modelnameToObject('ip_adapter_flux','ip_adapter') // todo improve this via autodetect or config option
             node('flux_ip_adapter',{image:{image_name:job.initimgObject.image_name},ip_adapter_model,clip_vision_model:'ViT-L',weight:job.controlweight,begin_step_percent:job.controlstart,end_step_percent:job.controlend,use_cache:true,is_intermediate:true})
         } else if (job.initimgObject&&job.control){
             // load controlnet
@@ -378,7 +378,17 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
             width:closestMultipleOf16(job.width),
             height:closestMultipleOf16(job.height)
         }
-
+        if (job.scalestart){
+            debugLog('adding scale start '+job.scalestart);fluxdenoiseoptions.cfg_scale_start_step=job.scalestart
+        }
+        if (job.scaleend){
+            debugLog('adding scale end '+job.scaleend);fluxdenoiseoptions.cfg_scale_end_step=job.scaleend
+        }
+        if (!job.scaleend && job.steps > 4 && job.scale > 1){
+            let e = Math.floor(job.steps/2)
+            fluxdenoiseoptions.cfg_scale_end_step = e
+            debugLog('Adjust cfg_scale_end value to '+e)
+        }
         if(job.initimgObject&&job.control==='i2l'&&job.strength){
             fluxdenoiseoptions.denoising_start=1.0-job.strength
         } else if (job.initimgObject&&job.control==='ipa'){
@@ -386,15 +396,16 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
         } else if (job.initimgObject&&lastid.control){
             fluxdenoisepipes.push(pipe(lastid.control,'control','SELF','control'))
         }
-        if(job.scale>1){
-            node('flux_text_encoder',{prompt:job.negative_prompt,use_cache:true,is_intermediate:true},
-                [
-                    pipe(lastid.clip,'clip','SELF','clip'),
-                    pipe(lastid.clip,'t5_encoder','SELF','t5_encoder'),
-                    pipe(lastid.clip,'max_seq_len','SELF','t5_max_seq_len')
-                ])
-            fluxdenoisepipes.push(pipe(lastid.conditioning,'conditioning','SELF','negative_text_conditioning'))
-        }
+        //if(job.scale>1){
+        // always add negative text conditioning // todo investigate deeper (flux-dev only ? At what scales is it useful?)
+        node('flux_text_encoder',{prompt:job.negative_prompt,use_cache:true,is_intermediate:true},
+            [
+                pipe(lastid.clip,'clip','SELF','clip'),
+                pipe(lastid.clip,'t5_encoder','SELF','t5_encoder'),
+                pipe(lastid.clip,'max_seq_len','SELF','t5_max_seq_len')
+            ])
+        fluxdenoisepipes.push(pipe(lastid.conditioning,'conditioning','SELF','negative_text_conditioning'))
+        //}
         if(lastid.latents){
             //fluxdenoiseoptions.width = closestMultipleOf16(job.width)
             //fluxdenoiseoptions.height = closestMultipleOf16(job.height)
@@ -721,6 +732,16 @@ const findHost = async(job=null)=>{
 
 const subscribeQueue = async(host,name='arty')=>{
     let socket = host.socket
+    // Clean up existing listeners before adding new ones
+    socket.removeAllListeners('batch_enqueued')
+    socket.removeAllListeners('queue_item_status_changed')
+    socket.removeAllListeners('invocation_started')
+    socket.removeAllListeners('invocation_complete')
+    socket.removeAllListeners('invocation_progress')
+    socket.removeAllListeners('model_load_started')
+    socket.removeAllListeners('model_load_completed')
+    socket.removeAllListeners('graph_execution_state_complete')
+
     try{
         socket.on('connect',()=>{
             socket.emit('subscribe_queue',{"queue_id":name})
@@ -1222,13 +1243,7 @@ const validateJob = async(job)=>{
         if(job.initimg||job.images?.length>0){
             // if no controlmode is set, set one from config default, same for controlresize and controlmode
             if(!job.control){
-                if(job.model.base==='flux'){ // hardcode flux to revert to i2l for now
-                    job.control='i2l'
-                    if(!job.controlstart){job.controlstart=0.125}
-                    if(!job.controlend){job.controlend=1}
-                } else {
-                    job.control=config.default.controlmode||'i2l'
-                }
+                job.control=config.default.controlmode||'i2l'
             }
             if(job.control!=='i2l'){
                 if(!job.controlresize||['just_resize','crop_resize','fill_resize'].includes(job.controlresize)===false){job.controlresize='just_resize'}//else{job.controlresize='just_resize'}
@@ -1719,7 +1734,7 @@ const processImage = async(img,host,type,options,tracking,creator) => {
             }
         }
         let batchId = await enqueueBatch(host,batch)
-        if(tracking?.type==='discord'){progress.update(tracking.msg,batchId)}
+        if(tracking?.type==='discord'){progress.update(tracking.msg,batchId,creator)}
         let images = await batchToImages(host,batchId)
         await deleteImage(host,initimg.image_name)
         if(config.credits.enabled&&cost>0&&creator?.discordid&&host.ownerid){
@@ -1996,7 +2011,11 @@ cast = async(job)=>{
         context.batchId = await enqueueBatch(context.host,graph)
         if(!context.batchId||context.batchId?.error){return {error:'Error queuing job '}}
         // Trigger progress update reporting if enabled
-        if(context.job.tracking?.type==='discord'){progress.update(job.tracking.msg,context.batchId)}
+        if(context.job.tracking?.type==='discord'){
+            debugLog(`Starting tracking progress updater, batch: ${context.batchId}`)
+            debugLog(context.job.creator)
+            progress.update(job.tracking.msg,context.batchId,context.job.creator)
+        }
         context.images = await batchToImages(context.host,context.batchId)
         resultCache.remove(context.batchId)
         if(context.images?.error){return {error:context.images?.error}}
