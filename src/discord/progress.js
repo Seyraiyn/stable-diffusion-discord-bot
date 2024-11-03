@@ -3,26 +3,46 @@ const {log,debugLog,sleep, getUUID, getRandomColorDec}=require('../utils.js')
 const {resultCache}=require('../resultCache')
 
 update = async(msg,batchid,creator)=>{
-    // Call once, repetitively update message with results of get(batchid)
-    let error=false,done=false,statusmsg=null,cached=null,result=null,interval=500,fails=0
-    while(!error&&!done){
+    // Increase interval between checks
+    const INITIAL_INTERVAL = 1000; // 1 second
+    const MAX_INTERVAL = 5000;     // 5 seconds
+    let interval = INITIAL_INTERVAL;
+    
+    let error=false,done=false,statusmsg=null,cached=null,result=null,fails=0;
+    
+    while(!error && !done) {
         try {
-            await sleep(interval)
-            result = resultCache.get(batchid)
-            if(['completed','failed','cancelled','canceled'].includes(result?.status)){await msg.delete();done = true;return}
-            statusmsg = returnProgressMessage(batchid,creator)
-            if(!statusmsg){
-                fails++
-                if(fails>3){await msg.delete();error=true;return}
-                continue
+            await sleep(interval);
+            result = resultCache.get(batchid);
+            
+            // Exit early conditions
+            if(['completed','failed','cancelled','canceled'].includes(result?.status)) {
+                await msg.delete();
+                return;
             }
-            if(statusmsg&&statusmsg!==cached){
-                cached=statusmsg // update cache
-                await msg.edit(statusmsg.msg,statusmsg.file) // edit progress message
+
+            // Only update if there's meaningful progress change
+            const newStatusMsg = returnProgressMessage(batchid,creator);
+            if(!newStatusMsg) {
+                fails++;
+                if(fails > 3) {
+                    await msg.delete();
+                    return;
+                }
+                // Increase interval on fails
+                interval = Math.min(interval * 1.5, MAX_INTERVAL);
+                continue;
             }
+
+            // Only edit message if content actually changed
+            if(newStatusMsg && JSON.stringify(newStatusMsg) !== JSON.stringify(cached)) {
+                cached = newStatusMsg;
+                await msg.edit(newStatusMsg.msg, newStatusMsg.file);
+            }
+
         } catch (err) {
-            debugLog(err)
-            error=true
+            debugLog(err);
+            error = true;
         }
     }
 }
