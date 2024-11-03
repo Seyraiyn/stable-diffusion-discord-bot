@@ -41,10 +41,20 @@ async function hashToUrl(hash){
     } else {return null}
 }
 
+async function hashToDownload(hash){
+    let modelId = await hashToModelId(hash)
+    let url
+    if(modelId!==null){
+        url = 'https://civitai.com/api/download/models/'+modelId
+        return url
+    } else {return null}
+}
+
 module.exports = {
     civitai: {
         fetchModelData,
         hashToModelId,
-        hashToUrl
+        hashToUrl,
+        hashToDownload
     }
 }
