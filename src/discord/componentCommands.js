@@ -50,15 +50,13 @@ let commands = [
             let msgid = (interaction.data.custom_id.split('-')[1]==='x')?interaction.message.id : interaction.data.custom_id.split('-')[1]
             let channelid = interaction.channel.id
             let img = null
-            // todo arty1 templates are sending edit component commands with no key or interaction.data.components
-            // Send update notice and tell to use /dream ?
             let key = null
             try{
                 key = interaction.data.custom_id.split('-')[2]??interaction.data?.components[0]?.components[0]?.custom_id
-            } catch (err) {
-                debugLog(err)
-            }
+            } catch (err) {debugLog(err)}
             if(!key){
+                // todo arty1 templates are sending edit component commands with no key or interaction.data.components
+                // Send update notice and tell to use /dream ?
                 debugLog('Someone trying to use an old arty1 template ?')
             }
             let value = interaction.data.custom_id.split('-')[2]?interaction.data.values[0]:interaction.data.components[0].components[0].value
@@ -361,6 +359,7 @@ let commands = [
         aliases: ['chooseLora'],
         command: async (interaction, creator) => {
             let msgid = interaction.data.custom_id.split('-')[1];
+            let page = parseInt(interaction.data.custom_id.split('-')[2]) || 0;
             let sourcemsg = await bot.getMessage(interaction.channel.id, msgid);
             let meta = await messageCommands.extractMetadataFromMessage(sourcemsg);
             let models = await invoke.allUniqueModelsAvailable();
@@ -373,82 +372,63 @@ let commands = [
             
             const itemsPerPage = 25;
             const totalPages = Math.ceil(availableLoras.length / itemsPerPage);
-            let currentPage = 0;
+            const start = page * itemsPerPage;
+            const end = start + itemsPerPage;
+            
+            const options = availableLoras.slice(start, end).map(lora => ({
+                label: lora.name,
+                value: lora.name,
+                description: lora.description || 'No description available',
+                emoji: null
+            }));
 
-            const getLoraOptions = (page) => {
-                const start = page * itemsPerPage;
-                const end = start + itemsPerPage;
-                return availableLoras.slice(start, end).map(lora => ({
-                    label: lora.name,
-                    value: lora.name,
-                    description: lora.description || 'No description available',
-                    emoji: null
-                }));
-            };
-
-            const updateDialog = async (page) => {
-                const options = getLoraOptions(page);
-                let dialog = {
-                    content: `:lora: **Select a Lora for ${currentModelBase}**\n` +
-                             `There are ${availableLoras.length} loras available.\n` +
-                             `Page ${page + 1} of ${totalPages}`,
-                    flags: 64,
+            let dialog = {
+                content: `:lora: **Select a Lora for ${currentModelBase}**\n` +
+                         `There are ${availableLoras.length} loras available.\n` +
+                         `Page ${page + 1} of ${totalPages}`,
+                flags: 64,
+                components: [{
+                    type: 1,
                     components: [{
-                        type: 1,
-                        components: [{
-                            type: 3,
-                            custom_id: 'applyLora-' + msgid,
-                            placeholder: 'Choose a lora',
-                            min_values: 1,
-                            max_values: 1,
-                            options: options
-                        }]
+                        type: 3,
+                        custom_id: 'applyLora-' + msgid,
+                        placeholder: 'Choose a lora',
+                        min_values: 1,
+                        max_values: 1,
+                        options: options
                     }]
-                };
-
-                // Add pagination buttons
-                const paginationComponents = [];
-                if (page > 0) {
-                    paginationComponents.push({
-                        type: 2,
-                        style: 1,
-                        label: 'Previous',
-                        custom_id: `previousLora-${msgid}-${page - 1}`,
-                        disabled: false
-                    });
-                }
-                if (page < totalPages - 1) {
-                    paginationComponents.push({
-                        type: 2,
-                        style: 1,
-                        label: 'Next',
-                        custom_id: `nextLora-${msgid}-${page + 1}`,
-                        disabled: false
-                    });
-                }
-                if (paginationComponents.length > 0) {
-                    dialog.components.push({
-                        type: 1,
-                        components: paginationComponents
-                    });
-                }
-
-                await interaction.editParent(dialog); // Update the existing message
+                }]
             };
 
-            await updateDialog(currentPage); // Show the first page
+            // Add pagination buttons
+            const paginationComponents = [];
+            if (page > 0) {
+                paginationComponents.push({
+                    type: 2,
+                    style: 1,
+                    label: 'Previous',
+                    custom_id: `chooseLora-${msgid}-${page - 1}`,
+                    disabled: false
+                });
+            }
+            if (page < totalPages - 1) {
+                paginationComponents.push({
+                    type: 2,
+                    style: 1,
+                    label: 'Next',
+                    custom_id: `chooseLora-${msgid}-${page + 1}`,
+                    disabled: false
+                });
+            }
+            if (paginationComponents.length > 0) {
+                dialog.components.push({
+                    type: 1,
+                    components: paginationComponents
+                });
+            }
 
-            // Handle pagination button interactions
-            bot.on('interactionCreate', async (interaction) => {
-                if (interaction.data.custom_id?.startsWith('previousLora-') || interaction.data.custom_id?.startsWith('nextLora-')) {
-                    const page = parseInt(interaction.data.custom_id.split('-')[2]);
-                    await updateDialog(page);
-                    return; // Prevent further processing
-                }
-                if (interaction.data.custom_id?.startsWith('applyLora-')) {
-                    return; // Prevent further processing
-                }
-            });
+            // Create new message instead of editing
+            await interaction.createMessage(dialog);
         }
     },
     {
@@ -691,8 +671,7 @@ let commands = [
             // Downvote result
             //debugLog(interaction)
             let cid = await messageCommands.extractImageCidFromMessageOrReply(msg)
-            if(cid){await mod.downvote(cid,creator)}
-            
+            if(cid){await mod.downvote(cid,creator)} // everyone can downvote
             if(
                 (interaction.member?.id===config.adminID)|| // bot admin
                 (msg.mentions.length>0&&interaction.member?.id===msg.mentions[0].id)|| // creator
@@ -707,7 +686,7 @@ let commands = [
                     } catch(err){log(err)}
                 }
                 try{await msg?.delete()}catch(err){debugLog('Discord error removing message');debugLog(err)}
-            } else {
+            }/* else {
                 // otherwise make them show their vote
                 try{
                     msg.addReaction('🗑️')
@@ -715,7 +694,7 @@ let commands = [
                     debugLog('Emoji command remove failed')
                     debugLog(err)
                 }
-            }
+            }*/
         }
     },
     {
@@ -973,10 +952,12 @@ parseCommand = async(interaction) => {
     } catch (err) {
         log('Failed to acknowledge interaction', err);
     }
+    /*
     // Check if the interaction is a pagination request
     if (interaction.data.custom_id.startsWith('previousLora-') || interaction.data.custom_id.startsWith('nextLora-')) {
         return; // Skip command parsing for pagination requests
     }
+    */
 
     let creator = await getCreatorInfoFromInteraction(interaction);
     if (!auth.check(creator.discordid, creator.guildid, creator.channelid)) { return; }
