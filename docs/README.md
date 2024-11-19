@@ -13,7 +13,7 @@ A powerful Discord bot that interfaces with [InvokeAI](https://github.com/invoke
 
 ## 🚧 Development Status
 
-This branch represents a major rewrite of the Arty project and is currently in alpha stage. It's compatible with `invokeai 5.3.0` but is not yet ready for public use.
+This branch represents a major rewrite of the Arty project and is currently in alpha stage. It's compatible with `invokeai 5.4.1` but is not yet ready for public use.
 
 ## ✨ Features
 
