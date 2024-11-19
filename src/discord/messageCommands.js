@@ -1701,7 +1701,8 @@ imageResultMessage = async(userid,img,result,meta,cid)=>{
     if(img.width&&img.height){t+=' :straight_ruler: '+img.width+'x'+img.height}
     //if(img.genWidth&&img.genHeight){t+=' :triangle_ruler: '+img.genWidth+'x'+img.genHeight}
     if(meta.invoke?.steps){t+=' :recycle: '+meta.invoke.steps}
-    if(meta.invoke?.scheduler){t+=' :eye: '+meta.invoke.scheduler}
+    // No scheduler/sampler applied to flux renders
+    if(meta.invoke?.scheduler&&meta.invoke?.model.base!=='flux'){t+=' :eye: '+meta.invoke.scheduler}
     if(meta.invoke?.seed){t+=' :game_die: '+meta.invoke.seed}
     if(meta.invoke?.scale){t+=' :scales: '+meta.invoke.scale}
     if(meta.invoke?.model){
