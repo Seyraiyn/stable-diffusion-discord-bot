@@ -26,7 +26,6 @@ const validUUID=(uuid)=>{
   return typeof uuid === 'string' && REGEX.test(uuid)
 }
 const sleep = async(ms)=>{return new Promise((resolve)=>{setTimeout(resolve,ms)}).catch(()=>{})}
-let config=JSON.parse(fs.readFileSync('./config/config.json','utf8'))
 const axios=require('axios')
 
 const urlToBuffer = async(url,nocache)=>{
@@ -86,6 +85,17 @@ const trimText = (text, maxLength) => {
   }
   return trimmedText
 }
+
+let configPath = './config/config.json'
+let exampleConfigPath = './config/config.json.example'
+// Check if config.json exists, if not, create it from config.json.example
+if (!fs.existsSync(configPath)) {
+    fs.copyFileSync(exampleConfigPath, configPath)
+    log('config.json created from config.json.example. Please edit it to set your keys.')
+    process.exit(1) // Exit the process after creating the config file
+}
+let config=JSON.parse(fs.readFileSync(configPath,'utf8'))
+
 
 module.exports = {
     config,
