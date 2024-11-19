@@ -23,8 +23,6 @@ const add = async(fileBuffer,creator,flags=null)=>{
     } else {
         result = {description:'IPFS already pinned for '+originalpinusr.username,cid,size:originalpinusr.size,flags:originalpinusr.flags,createdAt:originalpinusr.createdAt,user:originalpinusr.user,id:originalpinusr.id,created}
     }
-    //
-    
     debugLog(result)
     return result
 }
@@ -55,11 +53,21 @@ const hash = async(fileBuffer)=>{
 }
 
 const cat = async(cid)=>{
-    debugLog('ipfs: get '+cid)
-    let stream = await fs.cat(cid)
-    let chunks = []
-    for await (const chunk of stream){chunks.push(chunk)}
-    return Buffer.concat(chunks)
+    //debugLog(`IPFS: Attempting to retrieve content with CID: ${cid}`)
+    try {
+        let stream = await fs.cat(cid)
+        let chunks = []
+        for await (const chunk of stream){
+            chunks.push(chunk)
+            //debugLog(`IPFS: Received chunk of size: ${chunk.length} bytes`)
+        }
+        const result = Buffer.concat(chunks)
+        debugLog(`IPFS: Successfully retrieved content, total size: ${result.length} bytes`)
+        return result
+    } catch (err) {
+        debugLog(`IPFS: Error retrieving content: ${err.message}`)
+        throw err
+    }
 }
 
 const init = async()=>{
@@ -73,34 +81,54 @@ const init = async()=>{
     // Helia config
     const { createHelia } = await import('helia')
     const { unixfs } = await import('@helia/unixfs')
-    // Blockstore is where we store the blocks that make up files
     const { FsBlockstore } = await import('blockstore-fs')
-    const blockstore = new FsBlockstore('config/ipfs/block-store')
-    // Application-specific data lives in the datastore
     const { FsDatastore } = await import('datastore-fs')
+    const { tcp } = await import('@libp2p/tcp')
+    const { noise } = await import('@chainsafe/libp2p-noise')
+    const { yamux } = await import('@chainsafe/libp2p-yamux')
+    const { bootstrap } = await import('@libp2p/bootstrap')
+    const { identifyService } = await import('libp2p/identify')
+    
+    const blockstore = new FsBlockstore('config/ipfs/block-store')
     const datastore = new FsDatastore('config/ipfs/data-store')
-    // Disabled all libp2p customisation for now, let helia do it
-    helia = await createHelia({datastore,blockstore,libp2p: {connectionManager: {maxConnections: 50,minConnections: 10}},})
-    // Listen for new connections to peers
-    helia.libp2p.addEventListener("libp2p peer:connect", (evt) => {
-        const connection = evt.detail
-        debugLog(`libp2p Connected to ${connection.toString()}`)
-    })
-    // Listen for new peer discovery events
-    helia.libp2p.addEventListener('libp2p peer:discovery', (peerId) => {
-        // No need to dial, autoDial is on
-        debugLog('libp2p Discovered:', peerId.toString())
-    })
-    // Listen for peers disconnecting
-    helia.libp2p.addEventListener("libp2p peer:disconnect", (evt) => {
-        const connection = evt.detail
-        debugLog(`libp2p Disconnected from ${connection.toCID().toString()}`)
+    
+    helia = await createHelia({
+        datastore,
+        blockstore,
+        libp2p: {
+            addresses: {
+                listen: [
+                    '/ip4/0.0.0.0/tcp/4001',
+                    '/ip6/::/tcp/4001'
+                ],
+                announce: [
+                    `/ip4/${config.ipfs.ip}/tcp/4001`
+                ]
+            },
+            services: {
+                identify: identifyService()
+            },
+            connectionManager: {
+                maxConnections: 50,
+                minConnections: 10,
+                autoDialInterval: 30000,
+            },
+            transports: [tcp()],
+            streamMuxers: [yamux()],
+            connectionEncryption: [noise()],
+            peerDiscovery: [
+                bootstrap({
+                    list: [
+                        '/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
+                        '/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa',
+                        '/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
+                        '/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt'
+                    ]
+                })
+            ]
+        }
     })
     fs = unixfs(helia)
-    log('Initialized IPFS node with peer id '+helia.libp2p.peerId)
-    //debugLog(helia)
-    //debugLog(fs)
-    //await stop(helia) // needed?
 }
 
 module.exports = {
