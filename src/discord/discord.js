@@ -115,7 +115,7 @@ async function botInit(){
     debugLog(guild)
     chatDM(config.adminID,m)
   })
-  bot.on("guildDelete", (guild) => {var m='left guild: '+guild.name;log(m.bgRed);debugLog(guild);chatDM(config.adminID,m)})
+  bot.on("guildDelete", (guild) => {var m='left guild: '+guild.id;log(m.bgRed);chatDM(config.adminID,m)})
   bot.on('ready', async () => {
     log('Connected to '.bgGreen.black+' discord'.bgGreen+' in '+bot.guilds.size+' guilds')
     inviteLink = 'https://discord.com/oauth2/authorize?client_id='+bot.application.id+'&scope=bot&permissions=124992'
