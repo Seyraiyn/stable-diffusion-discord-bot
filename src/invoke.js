@@ -384,11 +384,13 @@ buildGraphFromJob = async(job)=>{ // Build new nodes graph based on job details
         if (job.scaleend){
             debugLog('adding scale end '+job.scaleend);fluxdenoiseoptions.cfg_scale_end_step=job.scaleend
         }
+        /*
         if (!job.scaleend && job.steps > 4 && job.scale > 1){
             let e = Math.floor(job.steps/2)
             fluxdenoiseoptions.cfg_scale_end_step = e
             debugLog('Adjust cfg_scale_end value to '+e)
         }
+        */
         if(job.initimgObject&&job.control==='i2l'&&job.strength){
             fluxdenoiseoptions.denoising_start=1.0-job.strength
         } else if (job.initimgObject&&job.control==='ipa'){
@@ -1195,7 +1197,6 @@ const validateJob = async(job)=>{
             } else {
                 job.negative_prompt=config.default.negprompt||''
             }
-            debugLog('negative prompt: '+job.negative_prompt)
         }
         job.positive_prompt=el.stripped?.replace(npromptregex,'')
         //job.positive_prompt=job.prompt?.replace(npromptregex,'')
@@ -2009,11 +2010,10 @@ cast = async(job)=>{
         }
         let graph = await buildGraphFromJob(context.job)
         context.batchId = await enqueueBatch(context.host,graph)
-        if(!context.batchId||context.batchId?.error){return {error:'Error queuing job '}}
-        // Trigger progress update reporting if enabled
+        if(!context.batchId||context.batchId?.error){
+            return {error:'Error queuing job '}
+        }
         if(context.job.tracking?.type==='discord'){
-            debugLog(`Starting tracking progress updater, batch: ${context.batchId}`)
-            debugLog(context.job.creator)
             progress.update(job.tracking.msg,context.batchId,context.job.creator)
         }
         context.images = await batchToImages(context.host,context.batchId)
