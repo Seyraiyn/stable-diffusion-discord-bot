@@ -5,7 +5,7 @@ const {resultCache}=require('../resultCache')
 update = async(msg,batchid,creator)=>{
     // Increase interval between checks
     const INITIAL_INTERVAL = 1000; // 1 second
-    const MAX_INTERVAL = 5000;     // 5 seconds
+    const MAX_INTERVAL = 3000;     // 3 seconds
     let interval = INITIAL_INTERVAL;
     
     let error=false,done=false,statusmsg=null,cached=null,result=null,fails=0;
