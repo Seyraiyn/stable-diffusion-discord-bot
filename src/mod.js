@@ -8,7 +8,6 @@ const {log,debugLog,config} = require('./utils')
 const mod = async(cid,user,action)=>{
     // add events to morderation db table
     // upvote,downvote,unvote,sfw,nsfw,rm
-    
     // check valid user
     let usr
     if(typeof(user)==='string'){ // assume arty db id
@@ -17,21 +16,17 @@ const mod = async(cid,user,action)=>{
         usr = await User.findOne({where:{discordID:user.discordid}})
     }
     if(!usr) return {error:'Not a valid user'}
-    // check valid cid
     let pin = await Pin.findOne({where:{cid}})
     if(!pin) return {error: 'Not a valid cid'}
     // todo only hold the most recent vote state (up,down,unvoted and sfw,unsfw) per cid
-    debugLog('Mod action: '+usr.username+' '+action+' '+cid)
+    debugLog('Moderation action: '+action+' '+cid);debugLog(user)
     if(action==='rm'){
         if((usr.id===pin.user) || (usr.id===1)){ 
             await ipfs.remove(pin.cid)
         } else { return {error:'Unable to remove, not creator or admin'}}
     }
     let [m,created] = await Moderation.findOrCreate({where:{cid:cid,user:usr.id,action},defaults:{cid:cid,user:usr.id,action}})
-    if(usr.id===pin.user){ // Request is from the original creator
-        if(action==='rm'){await ipfs.remove(pin.cid)}
-    }
-    if(usr.id===1){ // Admin user can delete anything
+    if((usr.id===pin.user)||(usr.id===1)){ // Request is from the original creator, or admin
         if(action==='rm'){await ipfs.remove(pin.cid)}
     }
     return created
