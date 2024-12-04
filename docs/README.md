@@ -2,7 +2,7 @@
 
 # Stable Diffusion Discord Bot
 
-A powerful Discord bot that interfaces with [InvokeAI](https://github.com/invoke-ai/InvokeAI), bringing advanced AI image generation capabilities to your server.
+A powerful Discord bot that interfaces with [InvokeAI](https://github.com/invoke-ai/InvokeAI), and [LMStudio](https://lmstudio.ai) bringing advanced AI image generation and chat capabilities to your server.
 
 [![top.gg](https://top.gg/api/widget/servers/973484171534172170.svg)](https://top.gg/bot/973484171534172170)
 ![discord](https://img.shields.io/discord/419390618209353730?style=plastic)
@@ -13,7 +13,7 @@ A powerful Discord bot that interfaces with [InvokeAI](https://github.com/invoke
 
 ## 🚧 Development Status
 
-This branch represents a major rewrite of the Arty project and is currently in alpha stage. It's compatible with `invokeai 5.4.1` but is not yet ready for public use.
+This branch represents a major rewrite of the Arty project and is currently in alpha stage. It's compatible with `invokeai 5.4.3` but is not yet ready for public use.
 
 ## ✨ Features
 
