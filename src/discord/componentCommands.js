@@ -370,61 +370,77 @@ let commands = [
             // Sort loras alphabetically, ignoring case
             availableLoras.sort((a, b) => a.name.localeCompare(b.name, undefined, {sensitivity: 'base'}));
             
-            const itemsPerPage = 25;
-            const totalPages = Math.ceil(availableLoras.length / itemsPerPage);
-            const start = page * itemsPerPage;
-            const end = start + itemsPerPage;
+            const itemsPerDropdown = 25; // Discord max options per dropdown
+            const dropdownsPerPage = 4; // Show 4 dropdowns per page
+            const totalDropdowns = Math.ceil(availableLoras.length / itemsPerDropdown);
+            const startDropdown = page * dropdownsPerPage;
+            const endDropdown = Math.min(startDropdown + dropdownsPerPage, totalDropdowns);
+            const totalPages = Math.ceil(totalDropdowns / dropdownsPerPage);
+
+            let components = [];
             
-            const options = availableLoras.slice(start, end).map(lora => ({
-                label: lora.name,
-                value: lora.name,
-                description: lora.description || 'No description available',
-                emoji: null
-            }));
+            // Create dropdowns for this page
+            for (let i = startDropdown; i < endDropdown; i++) {
+                const start = i * itemsPerDropdown;
+                const end = Math.min(start + itemsPerDropdown, availableLoras.length);
+                const startChar = availableLoras[start]?.name[0].toUpperCase() || '?';
+                const endChar = availableLoras[end - 1]?.name[0].toUpperCase() || '?';
+                
+                const options = availableLoras.slice(start, end).map(lora => ({
+                    label: lora.name,
+                    value: lora.name,
+                    description: lora.description || 'No description available',
+                    emoji: null
+                }));
+
+                components.push({
+                    type: 1,
+                    components: [{
+                        type: 3,
+                        custom_id: `applyLora-${msgid}-${i}`,
+                        placeholder: `Group ${i + 1}: ${startChar}-${endChar}`,
+                        min_values: 1,
+                        max_values: 1,
+                        options: options
+                    }]
+                });
+            }
 
             let dialog = {
                 content: `:lora: **Select a Lora for ${currentModelBase}**\n` +
                          `There are ${availableLoras.length} loras available.\n` +
                          `Page ${page + 1} of ${totalPages}`,
                 flags: 64,
-                components: [{
-                    type: 1,
-                    components: [{
-                        type: 3,
-                        custom_id: 'applyLora-' + msgid,
-                        placeholder: 'Choose a lora',
-                        min_values: 1,
-                        max_values: 1,
-                        options: options
-                    }]
-                }]
+                components: components
             };
 
-            // Add pagination buttons
-            const paginationComponents = [];
-            if (page > 0) {
-                paginationComponents.push({
-                    type: 2,
-                    style: 1,
-                    label: 'Previous',
-                    custom_id: `chooseLora-${msgid}-${page - 1}`,
-                    disabled: false
-                });
-            }
-            if (page < totalPages - 1) {
-                paginationComponents.push({
-                    type: 2,
-                    style: 1,
-                    label: 'Next',
-                    custom_id: `chooseLora-${msgid}-${page + 1}`,
-                    disabled: false
-                });
-            }
-            if (paginationComponents.length > 0) {
-                dialog.components.push({
-                    type: 1,
-                    components: paginationComponents
-                });
+            // Add pagination buttons if needed
+            if (totalPages > 1) {
+                const paginationComponents = [];
+                if (page > 0) {
+                    paginationComponents.push({
+                        type: 2,
+                        style: 1,
+                        label: 'Previous',
+                        custom_id: `chooseLora-${msgid}-${page - 1}`,
+                        disabled: false
+                    });
+                }
+                if (page < totalPages - 1) {
+                    paginationComponents.push({
+                        type: 2,
+                        style: 1,
+                        label: 'Next',
+                        custom_id: `chooseLora-${msgid}-${page + 1}`,
+                        disabled: false
+                    });
+                }
+                if (paginationComponents.length > 0) {
+                    dialog.components.push({
+                        type: 1,
+                        components: paginationComponents
+                    });
+                }
             }
 
             // Create new message instead of editing
@@ -437,7 +453,7 @@ let commands = [
         permissionLevel: 'all',
         aliases: ['applyLora'],
         command: async (interaction, creator) => {
-            let selectedLora = interaction.data.values[0]; // Get the selected Lora name
+            let selectedLora = interaction.data.values[0];
             let msgid = interaction.data.custom_id.split('-')[1]; // Get the message ID
             let sourcemsg = await bot.getMessage(interaction.channel.id, msgid); // Get the original message
             let meta = await messageCommands.extractMetadataFromMessage(sourcemsg); // Extract metadata
