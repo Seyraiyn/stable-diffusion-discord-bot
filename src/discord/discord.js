@@ -16,6 +16,7 @@ const {db,Image} = require("../db")
 let inviteLink = ''
 
 chat=async(channel,msg,file=null,retry=0)=>{
+  debugLog('chatting to channel '+channel)
   if(msg!==null&&msg!==''){
     try{
       if(file){
@@ -118,6 +119,8 @@ async function botInit(){
   bot.on("guildDelete", (guild) => {var m='left guild: '+guild.id;log(m.bgRed);chatDM(config.adminID,m)})
   bot.on('ready', async () => {
     log('Connected to '.bgGreen.black+' discord'.bgGreen+' in '+bot.guilds.size+' guilds')
+    const totalUsers = bot.guilds.reduce((acc, guild) => acc + guild.memberCount, 0);
+    log('Total user count across all guilds: ' + totalUsers)
     inviteLink = 'https://discord.com/oauth2/authorize?client_id='+bot.application.id+'&scope=bot&permissions=124992'
     log(('Invite bot to server: '+inviteLink).dim)
     slashCommands.init()
