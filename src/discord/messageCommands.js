@@ -127,6 +127,9 @@ let commands = [
             }
             */
             // allow replying to a message, insert the message text into the request
+            let img,imgurl
+            let imgres = await extractImageAndUrlFromMessageOrReply(msg)
+            if(imgres&&imgres?.img){img=imgres.img}else{img=null}
             if(msg.messageReference?.messageID){
                 let sourcemsg = await bot.getMessage(creator.channelid,msg.messageReference.messageID)
                 if (sourcemsg.embeds[0]?.description.length > 0) {
@@ -138,7 +141,7 @@ let commands = [
             let initResponse = '<@'+creator.discordid+'> :thought_balloon: `'+newprompt.substr(0,500)+'` '+timestamp()
             let stream
             try{
-                stream = await llm.chatStream(newprompt)
+                stream = await llm.chatStream(newprompt,null,img)
                 if(stream.error){return {error:stream.error}}
             } catch (err) {
                 debugLog('caught error in llm module')

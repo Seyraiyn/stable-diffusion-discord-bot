@@ -126,10 +126,11 @@ async function chat(prompt,systemprompt) {
     }
 }
 
-async function chatStream(prompt,systemprompt,model){
+async function chatStream(prompt,systemprompt,buffer=false,model=null,visionmodel=null){
     if (!systemprompt){systemprompt = config.llm?.systemprompt ?? 'You are a helpful chatbot. Do not censor your responses'}
-    if (!model){model=config.llm.model ?? 'none'}// Not required with LM Studio
-    prompt = await scrape(prompt)
+    if (!model){model=config.llm.model ?? 'none'}
+    if (!visionmodel){visionmodel=config.llm.visionmodel ?? null}
+    if(config.llm.scrapeUrls){prompt = await scrape(prompt)}
     const data = {
         messages: [ 
             { role: "system", "content": systemprompt },
@@ -142,6 +143,25 @@ async function chatStream(prompt,systemprompt,model){
         model:model,
         keep_alive:'0s', // not working in ollama windows, supposed to unload model after use
         choices: [{finish_reason: 'stop',index: 0}] // Get a warning in log from openrouter.ai api, failing to suppress it with this 
+    }
+    // if image in message, download, convert to base64
+    // .toString('base64')
+    if(buffer&&visionmodel){
+        try{
+            let b64 = buffer.toString('base64')
+            let imgdata = {
+                type:'image_url',
+                image_url:{
+                    url: 'data:image/png;base64,'+b64,
+                    detail:'high'
+                }
+            }
+            data.messages[1].content=[imgdata,{type:'text',text:prompt}]
+            data.model=visionmodel
+        } catch (err) {
+            log('Error in llm buffer conversion')
+            log(err)
+        }
     }
     try {
         const stream = await openai.beta.chat.completions.stream(data)
