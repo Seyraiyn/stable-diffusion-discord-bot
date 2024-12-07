@@ -324,6 +324,7 @@ if(config.llm?.enabled){
       {type: 3,name:'prompt',description:'What do you want to ask?',required:true,min_length:1,max_length:6000},
       {type: 3,name:'persona',description:'Pick a personality type for the bot',required:false,value:'',choices:llmpersonasChoices},
       {type: 3,name:'systemprompt',description:'Customise the system prompt to change how the bot behaves (advanced)',required:false,min_length:1,max_length:6000},
+      {type: 11, name: 'attachment', description: 'Examine this image', required: false},
       //{type: 5,name:'private',description:'Only you will see the chat dialog',required:false } // need boolean type and to handle response
     ],
     execute:async(i)=>{
@@ -334,10 +335,19 @@ if(config.llm?.enabled){
       let options = {}
       let allowed = await auth.userAllowedFeature({discordid:userid,username:username},'llm')
       if(!allowed){return {error:'llm is for members only'}}
+      let img,imgurl
       for (const arg in i.data.options){
         let a = i.data.options[arg]
         switch(a.name){
           default:options[a.name]=a.value;break
+          case('attachment'):{
+            options['attachment']=a.value
+            if(i.data.resolved.attachments[a.value].content_type.startsWith('image/')){
+              imgurl = i.data.resolved.attachments[a.value].url
+              img = await urlToBuffer(imgurl)
+            }
+            break;
+          }
         }
       }
       let newprompt = options.prompt
@@ -356,10 +366,11 @@ if(config.llm?.enabled){
       let initResponse = '<@'+userid+'> :thought_balloon: `'+newprompt.substr(0,1000)+'`'
       if(options.persona){initResponse+=' :brain: `'+options.persona+'`'}
       if(options.systemprompt){initResponse+=' :face_in_clouds:'}
+      if(options.attachment){initResponse+=' :paperclip:'}
       let flags=undefined
       if(options.private===true){flags=64}
       let modelname = null
-      let stream = await llm.chatStream(newprompt,systemprompt)
+      let stream = await llm.chatStream(newprompt,systemprompt,img)
       if(stream.error){return {error:stream.error}}
 
       startEditing=()=>{
